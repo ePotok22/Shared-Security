@@ -1,86 +1,68 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace FFF.Security.RSA
 {
+    /// <summary>
+    /// Represents information about RSA key parameters, particularly the sizes of various components
+    /// of an RSA key, based on the modulus length. This class is useful for determining the appropriate
+    /// byte sizes of RSA key components for different key lengths. It is serializable for easy storage
+    /// or transmission.
+    /// </summary>
     [Serializable]
     public class RSAParameterTraitsInfo
     {
+        /// <summary>
+        /// A static dictionary mapping standard RSA key sizes in bits to their corresponding byte sizes.
+        /// This helps in determining the size of various RSA key components based on the overall key size.
+        /// </summary>
+        private static readonly Dictionary<int, int> KeySizes = new Dictionary<int, int>
+    {
+        { 512, 0x40 },   // 512 bits -> 64 bytes
+        { 1024, 0x80 },  // 1024 bits -> 128 bytes
+        { 2048, 0x100 }, // 2048 bits -> 256 bytes
+        { 4096, 0x200 }  // 4096 bits -> 512 bytes
+    };
+
+        // Properties for storing sizes of various RSA key components. Initialized to -1 to indicate an uninitialized state.
+        public int SizeMod { get; private set; } = -1;  // Size of the modulus (n)
+        public int SizeExp { get; private set; } = -1;  // Size of the exponent (e, d)
+        public int SizeD { get; private set; } = -1;    // Size of D
+        public int SizeP { get; private set; } = -1;    // Size of P
+        public int SizeQ { get; private set; } = -1;    // Size of Q
+        public int SizeDP { get; private set; } = -1;   // Size of DP
+        public int SizeDQ { get; private set; } = -1;   // Size of DQ
+        public int SizeInvQ { get; private set; } = -1; // Size of Inverse Q
+
+        /// <summary>
+        /// Constructor that initializes the RSAParameterTraitsInfo based on a given modulus length.
+        /// It calculates the nearest upper power of 2 for the modulus length to handle non-standard sizes.
+        /// </summary>
+        /// <param name="modulusLengthInBits">The length of the RSA key modulus in bits.</param>
         public RSAParameterTraitsInfo(int modulusLengthInBits)
         {
-            // The modulus length is supposed to be one of the common lengths, which is the commonly referred to strength of the key,
-            // like 1024 bit, 2048 bit, etc.  It might be a few bits off though, since if the modulus has leading zeros it could show
-            // up as 1016 bits or something like that.
-            int assumedLength = -1;
-            double logbase = Math.Log(modulusLengthInBits, 2);
-            if (logbase == (int)logbase)
+            // Calculate the nearest upper power of 2 for non-standard modulus lengths.
+            int assumedLength = (int)Math.Pow(2, Math.Ceiling(Math.Log(modulusLengthInBits, 2)));
+
+            // Lookup and assign the sizes for RSA key components based on the calculated key size.
+            if (KeySizes.TryGetValue(assumedLength, out int size))
             {
-                // It's already an even power of 2
-                assumedLength = modulusLengthInBits;
+                SizeMod = size;
+                SizeExp = -1; // Size of the exponent is intentionally not set.
+                SizeD = size;
+                SizeP = size / 2;
+                SizeQ = size / 2;
+                SizeDP = size / 2;
+                SizeDQ = size / 2;
+                SizeInvQ = size / 2;
             }
             else
             {
-                // It's not an even power of 2, so round it up to the nearest power of 2.
-                assumedLength = (int)(logbase + 1.0);
-                assumedLength = (int)(Math.Pow(2, assumedLength));
-                System.Diagnostics.Debug.Assert(false);  // Can this really happen in the field?  I've never seen it, so if it happens
-                // you should verify that this really does the 'right' thing!
-            }
-
-            switch (assumedLength)
-            {
-                case 512:
-                    this.size_Mod = 0x40;
-                    this.size_Exp = -1;
-                    this.size_D = 0x40;
-                    this.size_P = 0x20;
-                    this.size_Q = 0x20;
-                    this.size_DP = 0x20;
-                    this.size_DQ = 0x20;
-                    this.size_InvQ = 0x20;
-                    break;
-                case 1024:
-                    this.size_Mod = 0x80;
-                    this.size_Exp = -1;
-                    this.size_D = 0x80;
-                    this.size_P = 0x40;
-                    this.size_Q = 0x40;
-                    this.size_DP = 0x40;
-                    this.size_DQ = 0x40;
-                    this.size_InvQ = 0x40;
-                    break;
-                case 2048:
-                    this.size_Mod = 0x100;
-                    this.size_Exp = -1;
-                    this.size_D = 0x100;
-                    this.size_P = 0x80;
-                    this.size_Q = 0x80;
-                    this.size_DP = 0x80;
-                    this.size_DQ = 0x80;
-                    this.size_InvQ = 0x80;
-                    break;
-                case 4096:
-                    this.size_Mod = 0x200;
-                    this.size_Exp = -1;
-                    this.size_D = 0x200;
-                    this.size_P = 0x100;
-                    this.size_Q = 0x100;
-                    this.size_DP = 0x100;
-                    this.size_DQ = 0x100;
-                    this.size_InvQ = 0x100;
-                    break;
-                default:
-                    System.Diagnostics.Debug.Assert(false); // Unknown key size?
-                    break;
+                // Handle cases where the key size is unknown, potentially through logging or exceptions.
+                Debug.Assert(false, "Unknown key size encountered in RSAParameterTraitsInfo.");
             }
         }
-
-        public int size_Mod = -1;
-        public int size_Exp = -1;
-        public int size_D = -1;
-        public int size_P = -1;
-        public int size_Q = -1;
-        public int size_DP = -1;
-        public int size_DQ = -1;
-        public int size_InvQ = -1;
     }
 }
+

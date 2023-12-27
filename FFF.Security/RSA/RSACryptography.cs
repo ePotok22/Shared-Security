@@ -11,40 +11,56 @@ using System.Text;
 
 namespace FFF.Security.RSA
 {
+    /// <summary>
+    /// This class provides RSA cryptographic functions, including RSA key generation, encryption,
+    /// decryption, and handling of cryptographic data structures. It serves as a utility class for
+    /// RSA encryption and decryption operations using PKCS1 standards.
+    /// </summary>
     public sealed class RSACryptography
     {
-        public static RSACryptoServiceProvider CreateRsaProviderPKCS1(int keyLength = 1024)
-        {
-            try
-            {
-                const int PROV_RSA_FULL = 1;
-                const int AT_KEYEXCHANGE = 1;
-                // const int AT_SIGNATURE = 2;
-                var csp = new CspParameters
-                {
-                    KeyContainerName = $"{Guid.NewGuid().ToString()}{Guid.NewGuid().ToString()}{Guid.NewGuid().ToString()}",
-                    ProviderType = PROV_RSA_FULL,
-                    KeyNumber = AT_KEYEXCHANGE
-                };
+        // Constants for RSA provider type and key exchange.
+        private const int DefaultKeyLength = 1024;
+        private const int ProvRsaFull = 1;
+        private const int AtKeyExchange = 1;
+        private const string StringEmpty = "";
+        private const string N = "N";
+        private const string SHA256 = "SHA256";
 
-                return new RSACryptoServiceProvider(keyLength, csp)
-                {
-                    PersistKeyInCsp = false
-                };
-            }
-            catch (Exception ex)
+        /// <summary>
+        /// Creates a new instance of the RSACryptoServiceProvider with a specified key length.
+        /// This instance is configured for key exchange purposes.
+        /// </summary>
+        /// <param name="keyLength">The length of the RSA key, defaults to 1024 bits.</param>
+        /// <returns>An instance of RSACryptoServiceProvider configured with the specified key length.</returns>
+        public static RSACryptoServiceProvider CreateRsaProviderPKCS1(int keyLength = DefaultKeyLength)
+        {
+            CspParameters csp = new CspParameters
             {
-                throw ex;
-            }
+                KeyContainerName = Guid.NewGuid().ToString(N),
+                ProviderType = ProvRsaFull,
+                KeyNumber = AtKeyExchange
+            };
+
+            return new RSACryptoServiceProvider(keyLength, csp)
+            {
+                PersistKeyInCsp = false
+            };
         }
 
-        public static RSACryptographyInfo GetRsaCryptoInfo(string secret,
-            string publicKey = "", string privateKey = "",
-            RSACryptoServiceProvider rsaProvider = null)
+        // <summary>
+        /// Generates RSA cryptography information including keys and the secret for encryption or decryption.
+        /// This method can optionally use an existing RSA provider or create a new one.
+        /// </summary>
+        /// <param name="secret">The secret text to be encrypted or decrypted.</param>
+        /// <param name="publicKey">Optional parameter for the public key.</param>
+        /// <param name="privateKey">Optional parameter for the private key.</param>
+        /// <param name="rsaProvider">Optional RSA provider to generate keys.</param>
+        /// <returns>A RSACryptographyInfo object containing RSA cryptographic data.</returns>
+        public static RSACryptographyInfo GetRsaCryptoInfo(string secret, string publicKey = StringEmpty, string privateKey = StringEmpty, RSACryptoServiceProvider rsaProvider = null)
         {
             try
             {
-                var rsa = rsaProvider ?? CreateRsaProviderPKCS1();
+                RSACryptoServiceProvider rsa = rsaProvider ?? CreateRsaProviderPKCS1();
                 if (rsa != null)
                 {
                     return new RSACryptographyInfo
@@ -53,10 +69,10 @@ namespace FFF.Security.RSA
                         Key = new RSAKeyInfo()
                         {
                             PrivateKey = string.IsNullOrEmpty(publicKey)
-                                ? ExportPrivateKeyToRSAPEM(rsa)?.Replace("\n", "")
+                                ? ExportPrivateKeyToRSAPEM(rsa)?.Replace(Environment.NewLine, StringEmpty)
                                 : privateKey,
                             PublicKey = string.IsNullOrEmpty(privateKey)
-                                ? ExportPublicKeyToRSAPEM(rsa)?.Replace("\n", "")
+                                ? ExportPublicKeyToRSAPEM(rsa)?.Replace(Environment.NewLine, StringEmpty)
                                 : publicKey,
                         }
                     };
@@ -73,6 +89,12 @@ namespace FFF.Security.RSA
             };
         }
 
+        /// <summary>
+        /// Encrypts a given secret using RSA encryption with a specified public key.
+        /// </summary>
+        /// <param name="secret">The secret text to be encrypted.</param>
+        /// <param name="publicKeyStr">The public key string for encryption.</param>
+        /// <returns>The encrypted string or an empty string if encryption fails.</returns>
         public static string RsaEncryptionPKCS1(string secret, string publicKeyStr)
         {
             try
@@ -82,10 +104,16 @@ namespace FFF.Security.RSA
             }
             catch (Exception)
             {
-                return string.Empty;
+                return StringEmpty;
             }
         }
 
+        /// <summary>
+        /// Decrypts an encrypted secret using RSA decryption with a specified private key.
+        /// </summary>
+        /// <param name="encryptedSecret">The encrypted secret text to be decrypted.</param>
+        /// <param name="privateKeyStr">The private key string for decryption.</param>
+        /// <returns>The decrypted string or an empty string if decryption fails.</returns>
         public static string RsaDecryptionPKCS1(string encryptedsecret, string privateKeyStr)
         {
             try
@@ -95,15 +123,20 @@ namespace FFF.Security.RSA
             }
             catch (Exception)
             {
-                return string.Empty;
+                return StringEmpty;
             }
         }
 
+        /// <summary>
+        /// Creates a hashed representation of a secret using SHA256.
+        /// </summary>
+        /// <param name="secret">The secret text to hash.</param>
+        /// <returns>A byte array containing the hashed secret or null in case of failure.</returns>
         public static byte[] CreateHashedSecret(string secret)
         {
             try
             {
-                var sha256 = new SHA256Managed();
+                SHA256Managed sha256 = new SHA256Managed();
                 return sha256.ComputeHash(Encoding.UTF8.GetBytes(secret));
             }
             catch (Exception)
@@ -112,26 +145,39 @@ namespace FFF.Security.RSA
             }
         }
 
+        /// <summary>
+        /// Creates a signature hash for a secret using SHA256 and a private key.
+        /// </summary>
+        /// <param name="secret">The secret to be hashed.</param>
+        /// <param name="privateKeyStr">The private key string used for hashing.</param>
+        /// <returns>The signature hash as a string or an empty string if it fails.</returns>
         public static string CreateSignatureHashSHA256(string secret, string privateKeyStr)
         {
             try
             {
-                var rsa = DecodeRsaPrivateKey(privateKeyStr);
-                var signatureHashbytes = rsa.SignHash(CreateHashedSecret(secret), CryptoConfig.MapNameToOID("SHA256"));
+                RSACryptoServiceProvider rsa = DecodeRsaPrivateKey(privateKeyStr);
+                byte[] signatureHashbytes = rsa.SignHash(CreateHashedSecret(secret), CryptoConfig.MapNameToOID(SHA256));
                 return Convert.ToBase64String(signatureHashbytes);
             }
             catch
             {
-                return string.Empty;
+                return StringEmpty;
             }
         }
 
+        /// <summary>
+        /// Verifies a signature hash against a secret using SHA256 and a public key.
+        /// </summary>
+        /// <param name="secret">The original secret string.</param>
+        /// <param name="signature">The signature hash to be verified.</param>
+        /// <param name="publicKeyStr">The public key string used for verification.</param>
+        /// <returns>True if the signature is verified, false otherwise.</returns>
         public static bool VerifySignatureHashSHA256(string secret, string signature, string publicKeyStr)
         {
             try
             {
-                var rsa = DecodeRsaPublicKey(publicKeyStr);
-                return rsa.VerifyHash(CreateHashedSecret(secret), CryptoConfig.MapNameToOID("SHA256"), Convert.FromBase64String(signature));
+                RSACryptoServiceProvider rsa = DecodeRsaPublicKey(publicKeyStr);
+                return rsa.VerifyHash(CreateHashedSecret(secret), CryptoConfig.MapNameToOID(SHA256), Convert.FromBase64String(signature));
             }
             catch (Exception)
             {
@@ -140,14 +186,19 @@ namespace FFF.Security.RSA
 
         }
 
+        /// <summary>
+        /// Generates RSA key information using an existing or new RSACryptoServiceProvider.
+        /// </summary>
+        /// <param name="rsaProvider">Optional RSA provider for generating the key information.</param>
+        /// <returns>An RSAKeyInfo object containing public and private key information.</returns>
         public static RSAKeyInfo GenerateRsaKey(RSACryptoServiceProvider rsaProvider = null)
         {
-            var rsa = rsaProvider ?? CreateRsaProviderPKCS1();
+            RSACryptoServiceProvider rsa = rsaProvider ?? CreateRsaProviderPKCS1();
             if (rsa == null) return new RSAKeyInfo();
             return new RSAKeyInfo()
             {
-                PublicKey = ExportPublicKeyToRSAPEM(rsa)?.Replace("\n", "") ?? string.Empty,
-                PrivateKey = ExportPrivateKeyToRSAPEM(rsa)?.Replace("\n", "") ?? string.Empty
+                PublicKey = ExportPublicKeyToRSAPEM(rsa)?.Replace(Environment.NewLine, StringEmpty) ?? StringEmpty,
+                PrivateKey = ExportPrivateKeyToRSAPEM(rsa)?.Replace(Environment.NewLine, StringEmpty) ?? StringEmpty
             };
         }
 
@@ -183,7 +234,7 @@ namespace FFF.Security.RSA
             {
                 if (pemString.Contains(PEMheader(d)) && pemString.Contains(PEMfooter(d))) return d;
             }
-            return PEMTypes.unknown;
+            return PEMTypes.UNKNOWN;
         }
 
         internal static byte[] GetBytesFromPEM(string pemString, PEMTypes type, out Dictionary<string, string> extras)
@@ -222,7 +273,7 @@ namespace FFF.Security.RSA
         {
             PEMTypes keyType = GetPEMType(pemString);
             Dictionary<string, string> extras;
-            if (keyType == PEMTypes.unknown) return null;
+            if (keyType == PEMTypes.UNKNOWN) return null;
             return GetBytesFromPEM(pemString, keyType, out extras);
         }
 
@@ -645,8 +696,8 @@ namespace FFF.Security.RSA
                 // what the RSAParameters expect.  Thanks, Microsoft.
                 RSAParameterTraitsInfo traits = new RSAParameterTraitsInfo(rsAparams.Modulus.Length * 8);
 
-                rsAparams.Modulus = AlignBytes(rsAparams.Modulus, traits.size_Mod);
-                rsAparams.Exponent = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.size_Exp);
+                rsAparams.Modulus = AlignBytes(rsAparams.Modulus, traits.SizeMod);
+                rsAparams.Exponent = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.SizeExp);
                 //rsAparams.D = Helpers.AlignBytes(rd.ReadBytes(Helpers.DecodeIntegerSize(rd)), traits.size_D);
                 //rsAparams.P = Helpers.AlignBytes(rd.ReadBytes(Helpers.DecodeIntegerSize(rd)), traits.size_P);
                 //rsAparams.Q = Helpers.AlignBytes(rd.ReadBytes(Helpers.DecodeIntegerSize(rd)), traits.size_Q);
@@ -748,14 +799,14 @@ namespace FFF.Security.RSA
                 // what the RSAParameters expect.  Thanks, Microsoft.
                 RSAParameterTraitsInfo traits = new RSAParameterTraitsInfo(rsAparams.Modulus.Length * 8);
 
-                rsAparams.Modulus = AlignBytes(rsAparams.Modulus, traits.size_Mod);
-                rsAparams.Exponent = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.size_Exp);
-                rsAparams.D = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.size_D);
-                rsAparams.P = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.size_P);
-                rsAparams.Q = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.size_Q);
-                rsAparams.DP = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.size_DP);
-                rsAparams.DQ = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.size_DQ);
-                rsAparams.InverseQ = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.size_InvQ);
+                rsAparams.Modulus = AlignBytes(rsAparams.Modulus, traits.SizeMod);
+                rsAparams.Exponent = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.SizeExp);
+                rsAparams.D = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.SizeD);
+                rsAparams.P = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.SizeP);
+                rsAparams.Q = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.SizeDQ);
+                rsAparams.DP = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.SizeDP);
+                rsAparams.DQ = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.SizeDQ);
+                rsAparams.InverseQ = AlignBytes(rd.ReadBytes(DecodeIntegerSize(rd)), traits.SizeInvQ);
 
                 rsa.ImportParameters(rsAparams);
                 return rsa;
@@ -797,7 +848,7 @@ namespace FFF.Security.RSA
             {PEMTypes.PEM_ECPRIVATEKEY , "EC PRIVATE KEY"},
             {PEMTypes.PEM_CMS , "CMS"},
             {PEMTypes.PEM_SSH2_PUBLIC , "SSH2 PUBLIC KEY"},
-            {PEMTypes.unknown , "UNKNOWN"}
+            {PEMTypes.UNKNOWN , "UNKNOWN"}
         };
 
         #endregion Helper

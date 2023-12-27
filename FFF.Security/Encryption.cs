@@ -1,5 +1,6 @@
-﻿using Microsoft.IdentityModel.Tokens;
-using System;
+﻿using System;
+using System.Globalization;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -7,86 +8,97 @@ namespace FFF.Security
 {
     public static class Encryption
     {
+        // Constants used across the class.
         private const string Passphrase = "hy98219126ygu3297t39287yr93r8h8038ur0239ur38273273yr839283y92323hfbj3bsbd3273";
-
         private const int SaltLength = 3;
-
         private const long DateEncryptionFactor = 111999;
+        private const string DateFormat = "yyyyMMdd";
 
-        public static long EncryptDate(DateTime dt)
-        {
-            var dateValue = long.Parse(dt.ToString("yyyyMMdd"));
-            dateValue *= DateEncryptionFactor;
-            return dateValue;
-        }
+        /// <summary>
+        /// Encrypts a DateTime object into a long representation.
+        /// </summary>
+        /// <param name="dt">The DateTime object to be encrypted.</param>
+        /// <returns>A long representing the encrypted date.</returns>
+        public static long EncryptDate(DateTime dt) =>
+            long.Parse(dt.ToString(DateFormat)) * DateEncryptionFactor;
 
+        /// <summary>
+        /// Decrypts a long representation of a date back to a DateTime object.
+        /// </summary>
+        /// <param name="dateValue">The encrypted date as a long.</param>
+        /// <returns>The decrypted DateTime object.</returns>
         public static DateTime DecryptDate(long dateValue)
         {
-            var afetrFacrot = dateValue / DateEncryptionFactor;
-            var stringValue = afetrFacrot.ToString();
-            var stringDate = string.Format("{0}/{1}/{2}", stringValue.Substring(0, 4), stringValue.Substring(4, 2),
-                                           stringValue.Substring(6, 2));
-            DateTime date;
+            string stringValue = (dateValue / DateEncryptionFactor).ToString("00000000");
+            if (DateTime.TryParseExact(stringValue, DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime date))
+                return date;
 
-            DateTime.TryParse(stringDate, out date);
-
-            return date;
+            throw new FormatException("Invalid encrypted date value.");
         }
 
-        public static string EncryptString(string text)
-        {
-            return DoEncryptString(text);
-        }
+        /// <summary>
+        /// Encrypts a string using a predefined encryption algorithm.
+        /// </summary>
+        /// <param name="text">The text to encrypt.</param>
+        /// <returns>The encrypted string.</returns>
+        public static string EncryptString(string text) =>
+            DoEncryptString(text);
 
+        // <summary>
+        /// Decrypts a string using a predefined decryption algorithm.
+        /// Supports backward compatibility with an old decryption method.
+        /// </summary>
+        /// <param name="text">The text to decrypt.</param>
+        /// <returns>The decrypted string.</returns>
         public static string DecryptString(string text)
         {
-            var decryptedText = DoDecryptString(text);
+            string decryptedText = DoDecryptString(text);
 
-            if (!string.IsNullOrEmpty(decryptedText) && (text == decryptedText))
-            {
-                // Backward compatible in case the text is still use the old algorithm
+            if (!string.IsNullOrEmpty(decryptedText) && text.Equals(decryptedText))
                 decryptedText = DoDecryptStringOld(text);
-            }
 
             return decryptedText;
-
         }
 
+        /// <summary>
+        /// Decodes an encrypted record ID into an integer.
+        /// </summary>
+        /// <param name="safeRecordId">The encrypted record ID as a string.</param>
+        /// <returns>The decoded integer ID.</returns>
         public static int DecodeRecordId(string safeRecordId)
         {
-            int result;
+            if (safeRecordId.Contains(' '))
+                safeRecordId = safeRecordId.Replace(' ', '+');
 
-            int.TryParse(DecryptString(safeRecordId.Replace(' ', '+')), out result);
+            if (int.TryParse(DecryptString(safeRecordId), out int result))
+                return result;
 
-            return result;
+            throw new FormatException("Invalid encrypted record ID.");
         }
 
-        public static string EncodeRecordId(int recordId)
-        {
-            var result = EncryptString(recordId.ToString());
+        /// <summary>
+        /// Encodes a record ID into an encrypted string.
+        /// </summary>
+        /// <param name="recordId">The record ID to encode.</param>
+        /// <returns>The encoded record ID as a string.</returns>
+        public static string EncodeRecordId(int recordId) =>
+            DoEncryptString(recordId.ToString());
 
-            return result;
-        }
+        /// <summary>
+        /// Encrypts an image ID to be used in a URL.
+        /// </summary>
+        /// <param name="imageId">The image ID to encrypt.</param>
+        /// <returns>The encrypted image ID.</returns>
+        public static string EncodeClaimImageUrl(string imageId) =>
+            DoEncryptString(imageId);
 
-        public static string EncodeClaimImageUrl(string imageId)
-        {
-            return EncryptString(imageId);
-        }
-
-        public static string DecodeClaimImageUrl(string imageId)
-        {
-            return DecryptString(imageId);
-        }
-
-        public static bool CustomLifetimeValidator(DateTime? notBefore, DateTime? expires,
-            SecurityToken tokenToValidate, TokenValidationParameters @param)
-        {
-            if (expires != null)
-            {
-                return expires > DateTime.UtcNow;
-            }
-            return false;
-        }
+        // <summary>
+        /// Decrypts an encrypted image ID used in a URL.
+        /// </summary>
+        /// <param name="imageId">The encrypted image ID to decrypt.</param>
+        /// <returns>The decrypted image ID.</returns>
+        public static string DecodeClaimImageUrl(string imageId) =>
+            DecryptString(imageId);
 
         #region Helper
 
